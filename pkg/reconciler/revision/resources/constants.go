@@ -22,4 +22,6 @@ const (
 
 	// AppLabelKey is the label defining the application's name.
 	AppLabelKey = "app"
+
+	Oauth2ProxyContainerName = "ce-oauth2-proxy"
 )
