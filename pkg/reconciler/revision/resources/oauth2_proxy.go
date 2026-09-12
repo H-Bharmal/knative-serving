@@ -1,0 +1,149 @@
+/*
+Copyright 2025 IBM Corp.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+*/
+
+package resources
+
+import (
+	"fmt"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	v1 "knative.dev/serving/pkg/apis/serving/v1"
+	"knative.dev/serving/pkg/reconciler/revision/config"
+)
+
+const (
+	// Oauth2ProxyConfigSecretAnnotation is the Code Engine per-ksvc annotation that names
+	// the Kubernetes Secret holding the oauth2-proxy configuration.
+	// When present, the revision reconciler injects the ce-oauth2-proxy sidecar.
+	Oauth2ProxyConfigSecretAnnotation = "codeengine.cloud.ibm.com/oauth2-proxy-config-secret"
+
+	// Oauth2ProxyConfigConfigMapAnnotation is the annotation that holds the name of Kubernetes Configmap holding the oauth2-proxy additional/optional configuration
+	Oauth2ProxyConfigConfigMapAnnotation = "codeengine.cloud.ibm.com/oauth2-proxy-config-configmap"
+)
+
+const (
+	oauth2ProxyContainerPortName = "ce-oauth2-port"
+
+	oauth2ProxyHTTPAddressEnv = "OAUTH2_PROXY_HTTP_ADDRESS"
+	oauth2ProxyUpstreamsEnv   = "OAUTH2_PROXY_UPSTREAMS"
+)
+
+type oauth2ProxyRevisionConfig struct {
+	ConfigSecretName    string
+	ConfigConfigmapName string
+}
+
+func MakeOauth2ProxyContainer(rev *v1.Revision, cfg *config.Config) (corev1.Container, error) {
+	oauth2ProxyPort := getOauth2ProxyPort(rev)
+	oauth2ProxyConfig := oauth2ProxyRevisionConfig{
+		ConfigSecretName:    rev.Annotations[Oauth2ProxyConfigSecretAnnotation],
+		ConfigConfigmapName: rev.Annotations[Oauth2ProxyConfigConfigMapAnnotation],
+	}
+
+	// THINK: should it be here or in deploy.go and pass the user port?
+	// since, if there is any modification in user-port in code after MakeOauth2ProxyContainer, we would be using wrong user-port. Can it happen ?
+	userPort := getUserPort(rev)
+
+	oauth2ProxyContainer := corev1.Container{
+		Name:  Oauth2ProxyContainerName,
+		Image: cfg.Deployment.Oauth2ProxySidecarImage,
+		Ports: []corev1.ContainerPort{{
+			Name:          oauth2ProxyContainerPortName,
+			ContainerPort: oauth2ProxyPort,
+		}},
+		Env: buildOauth2ProxyEnv(oauth2ProxyPort, userPort),
+
+		// The current append order causes the secret env have precendence over configmap.
+		EnvFrom: append(
+			buildOauth2ProxyEnvFromConfigMap(oauth2ProxyConfig.ConfigConfigmapName),
+			buildOauth2ProxyEnvFromSecret(oauth2ProxyConfig.ConfigSecretName)...,
+		),
+		ReadinessProbe: buildOauth2ProxyReadinessProbe(rev, oauth2ProxyPort),
+
+		// TODO: verify this is correct
+		Lifecycle:       userLifecycle,
+		SecurityContext: queueSecurityContext,
+	}
+
+	return oauth2ProxyContainer, nil
+}
+
+func buildOauth2ProxyEnv(oauth2ProxyPort, userPort int32) []corev1.EnvVar {
+	return []corev1.EnvVar{{
+		Name: oauth2ProxyHTTPAddressEnv,
+		// This has to be 0.0.0.0 to allow the kubernetes readiness probes to work
+		Value: fmt.Sprintf("http://0.0.0.0:%d", oauth2ProxyPort),
+	}, {
+		Name:  oauth2ProxyUpstreamsEnv,
+		Value: fmt.Sprintf("http://127.0.0.1:%d", userPort),
+	}}
+}
+
+func buildOauth2ProxyEnvFromSecret(name string) []corev1.EnvFromSource {
+	if name == "" {
+		return nil
+	}
+	return []corev1.EnvFromSource{{
+		SecretRef: &corev1.SecretEnvSource{
+			LocalObjectReference: corev1.LocalObjectReference{Name: name},
+		},
+	}}
+}
+
+func buildOauth2ProxyEnvFromConfigMap(name string) []corev1.EnvFromSource {
+	if name == "" {
+		return nil
+	}
+	return []corev1.EnvFromSource{{
+		ConfigMapRef: &corev1.ConfigMapEnvSource{
+			LocalObjectReference: corev1.LocalObjectReference{Name: name},
+		},
+	}}
+}
+
+// TODO: Make it more aggressive.
+func buildOauth2ProxyReadinessProbe(rev *v1.Revision, port int32) *corev1.Probe {
+	probeTimeout := int32(0)
+	if rev.Spec.TimeoutSeconds != nil {
+		probeTimeout = int32(*rev.Spec.TimeoutSeconds)
+	}
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{
+			Path:   "/ready",
+			Port:   intstr.FromInt32(port),
+			Scheme: corev1.URISchemeHTTP,
+		}},
+		InitialDelaySeconds: 5,
+		PeriodSeconds:       5,
+		TimeoutSeconds:      probeTimeout,
+		FailureThreshold:    3,
+	}
+}
+
+func getOauth2ProxyPort(rev *v1.Revision) int32 {
+	// TODO: change the oauth2-proxy port to default 4180, set it as env as well (if similar is done in queue-proxy)
+	port := int32(9095)
+	for {
+		used := false
+		for _, container := range append(rev.Spec.InitContainers, rev.Spec.Containers...) {
+			for _, containerPort := range container.Ports {
+				if containerPort.ContainerPort == port {
+					used = true
+					break
+				}
+			}
+			if used {
+				break
+			}
+		}
+		if !used {
+			return port
+		}
+		port++
+	}
+}
