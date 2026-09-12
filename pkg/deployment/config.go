@@ -87,6 +87,9 @@ const (
 
 	// pod-is-always-schedulable
 	podIsAlwaysSchedulableKey = "pod-is-always-schedulable"
+
+	// oauth2ProxySidecarImageKey is the config map key for oauth2-proxy sidecar image.
+	oauth2ProxySidecarImageKey = "oauth2-proxy-sidecar-image"
 )
 
 var (
@@ -216,8 +219,13 @@ func NewConfigFromMap(configMap map[string]string) (*Config, error) {
 		cm.AsString(RuntimeClassNameKey, &runtimeClassNames),
 
 		cm.AsBool(podIsAlwaysSchedulableKey, &nc.PodIsAlwaysSchedulable),
+		cm.AsString(oauth2ProxySidecarImageKey, &nc.Oauth2ProxySidecarImage),
 	); err != nil {
 		return nil, err
+	}
+
+	if nc.Oauth2ProxySidecarImage == "" {
+		return nil, errors.New("oauth2-proxy-sidecar-image cannot be empty or unset")
 	}
 
 	if nc.QueueSidecarImage == "" {
@@ -340,4 +348,8 @@ type Config struct {
 
 	// PodIsAlwaysSchedulable specifies whether pods are considered to be always schedulable
 	PodIsAlwaysSchedulable bool
+
+	// Oauth2ProxySidecarImage is the name of the image used for the queue sidecar
+	// injected into the revision pod.
+	Oauth2ProxySidecarImage string
 }
