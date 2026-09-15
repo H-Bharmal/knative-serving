@@ -210,7 +210,21 @@ func makePodSpec(rev *v1.Revision, cfg *config.Config) (*corev1.PodSpec, error) 
 		extraVolumes = append(extraVolumes, certVolume(networking.ServingCertName))
 	}
 
-	podSpec := BuildPodSpec(rev, append(BuildUserContainers(rev, cfg.Features), *queueContainer), cfg)
+	containers := BuildUserContainers(rev, cfg.Features)
+
+	if IsOIDCAuthenticationEnabled(rev, cfg) {
+		oauth2ProxyContainer, err := MakeOauth2ProxyContainer(rev, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create ce-oauth2-proxy container: %w", err)
+		}
+		rewriteQueueProxyUserPort(queueContainer, oauth2ProxyContainer.Ports[0].ContainerPort)
+		// Insert oauth2-proxy before queue-proxy: [user containers..., ce-oauth2-proxy, queue-proxy]
+		containers = append(containers, oauth2ProxyContainer)
+	}
+
+	containers = append(containers, *queueContainer)
+
+	podSpec := BuildPodSpec(rev, containers, cfg)
 	podSpec.Volumes = append(podSpec.Volumes, extraVolumes...)
 
 	if val := cfg.Deployment.PodRuntimeClassName(rev.ObjectMeta.Labels); podSpec.RuntimeClassName == nil {
@@ -321,6 +335,19 @@ func getUserPort(rev *v1.Revision) int32 {
 	}
 
 	return v1.DefaultUserPort
+}
+
+// rewriteQueueProxyUserPort overwrites the USER_PORT env var on the queue-proxy container
+// so that it points at newPort instead of the original user-container port. This is required
+// when the oauth2-proxy sidecar is injected: the request chain becomes
+// queue-proxy → oauth2-proxy → user container, so queue-proxy must forward to oauth2-proxy.
+func rewriteQueueProxyUserPort(queueContainer *corev1.Container, newPort int32) {
+	for i := range queueContainer.Env {
+		if queueContainer.Env[i].Name == "USER_PORT" {
+			queueContainer.Env[i].Value = strconv.Itoa(int(newPort))
+			return
+		}
+	}
 }
 
 func buildContainerPorts(userPort int32) []corev1.ContainerPort {
