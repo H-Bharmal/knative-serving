@@ -12,6 +12,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	apiconfig "knative.dev/serving/pkg/apis/config"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	"knative.dev/serving/pkg/reconciler/revision/config"
 )
@@ -38,6 +39,15 @@ type oauth2ProxyRevisionConfig struct {
 	ConfigConfigmapName string
 }
 
+// IsOIDCAuthenticationEnabled reports whether the oauth2-proxy sidecar should be injected
+// for this revision. It checks 2 conditions:
+//  1. operator-level feature flag codeengine.oidc-authentication is Enabled.
+//  2. Oauth2ProxyConfigSecretAnnotation that holds config secret name. (This is the per-revision).
+func IsOIDCAuthenticationEnabled(rev *v1.Revision, cfg *config.Config) bool {
+	return cfg.Features.OIDCAuthentication == apiconfig.Enabled &&
+		rev.Annotations[Oauth2ProxyConfigSecretAnnotation] != ""
+}
+
 func MakeOauth2ProxyContainer(rev *v1.Revision, cfg *config.Config) (corev1.Container, error) {
 	oauth2ProxyPort := getOauth2ProxyPort(rev)
 	oauth2ProxyConfig := oauth2ProxyRevisionConfig{
@@ -47,6 +57,8 @@ func MakeOauth2ProxyContainer(rev *v1.Revision, cfg *config.Config) (corev1.Cont
 
 	// THINK: should it be here or in deploy.go and pass the user port?
 	// since, if there is any modification in user-port in code after MakeOauth2ProxyContainer, we would be using wrong user-port. Can it happen ?
+	// getUserPort is a pure read of rev.Spec hence safe to call independently here.
+	// userPort never changes after container construction, so this value is always correct.
 	userPort := getUserPort(rev)
 
 	oauth2ProxyContainer := corev1.Container{
