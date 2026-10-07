@@ -308,8 +308,9 @@ func testDeploymentCM() *corev1.ConfigMap {
 			Namespace: system.Namespace(),
 		},
 		Data: map[string]string{
-			"queueSidecarImage": testQueueImage,
-			"autoscalerImage":   testAutoscalerImage,
+			"queueSidecarImage":                   testQueueImage,
+			"autoscalerImage":                     testAutoscalerImage,
+			deployment.Oauth2ProxySidecarImageKey: "myoauth2proxyimage",
 		},
 	}
 }
@@ -616,7 +617,8 @@ func TestGlobalResyncOnConfigMapUpdateDeployment(t *testing.T) {
 			Name:      deployment.ConfigName,
 		},
 		Data: map[string]string{
-			"queueSidecarImage": "myAwesomeQueueImage",
+			"queueSidecarImage":                   "myAwesomeQueueImage",
+			deployment.Oauth2ProxySidecarImageKey: "myoauth2proxyimage",
 		},
 	}
 	const expected = "myAwesomeQueueImage"

@@ -88,8 +88,8 @@ const (
 	// pod-is-always-schedulable
 	podIsAlwaysSchedulableKey = "pod-is-always-schedulable"
 
-	// oauth2ProxySidecarImageKey is the config map key for oauth2-proxy sidecar image.
-	oauth2ProxySidecarImageKey = "oauth2-proxy-sidecar-image"
+	// Oauth2ProxySidecarImageKey is the config map key for oauth2-proxy sidecar image.
+	Oauth2ProxySidecarImageKey = "oauth2-proxy-sidecar-image"
 )
 
 var (
@@ -219,7 +219,7 @@ func NewConfigFromMap(configMap map[string]string) (*Config, error) {
 		cm.AsString(RuntimeClassNameKey, &runtimeClassNames),
 
 		cm.AsBool(podIsAlwaysSchedulableKey, &nc.PodIsAlwaysSchedulable),
-		cm.AsString(oauth2ProxySidecarImageKey, &nc.Oauth2ProxySidecarImage),
+		cm.AsString(Oauth2ProxySidecarImageKey, &nc.Oauth2ProxySidecarImage),
 	); err != nil {
 		return nil, err
 	}
