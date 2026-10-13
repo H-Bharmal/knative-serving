@@ -75,9 +75,8 @@ func MakeOauth2ProxyContainer(rev *v1.Revision, cfg *config.Config) (corev1.Cont
 			buildOauth2ProxyEnvFromConfigMap(oauth2ProxyConfig.ConfigConfigmapName),
 			buildOauth2ProxyEnvFromSecret(oauth2ProxyConfig.ConfigSecretName)...,
 		),
-		ReadinessProbe: buildOauth2ProxyReadinessProbe(rev, oauth2ProxyPort),
+		ReadinessProbe: buildOauth2ProxyReadinessProbe(oauth2ProxyPort),
 
-		// TODO: verify this is correct
 		Lifecycle:       userLifecycle,
 		SecurityContext: queueSecurityContext,
 	}
@@ -118,22 +117,17 @@ func buildOauth2ProxyEnvFromConfigMap(name string) []corev1.EnvFromSource {
 	}}
 }
 
-// TODO: Make it more aggressive.
-func buildOauth2ProxyReadinessProbe(rev *v1.Revision, port int32) *corev1.Probe {
-	probeTimeout := int32(0)
-	if rev.Spec.TimeoutSeconds != nil {
-		probeTimeout = int32(*rev.Spec.TimeoutSeconds)
-	}
+func buildOauth2ProxyReadinessProbe(port int32) *corev1.Probe {
 	return &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{
 			Path:   "/ready",
 			Port:   intstr.FromInt32(port),
 			Scheme: corev1.URISchemeHTTP,
 		}},
-		InitialDelaySeconds: 5,
-		PeriodSeconds:       5,
-		TimeoutSeconds:      probeTimeout,
-		FailureThreshold:    3,
+		PeriodSeconds:    1,
+		TimeoutSeconds:   1,
+		SuccessThreshold: 1,
+		FailureThreshold: 3,
 	}
 }
 
