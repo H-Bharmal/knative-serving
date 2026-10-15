@@ -1895,6 +1895,124 @@ func TestMakePodSpec(t *testing.T) {
 				withEnvVar("SERVING_READINESS_PROBE", `{"httpGet":{"path":"/","port":8080,"host":"127.0.0.1","scheme":"HTTP"}}`),
 			),
 		}, withRuntimeClass("kata")),
+	}, {
+		name: "oidc enabled with secret annotation injects oauth2-proxy before queue-proxy",
+		dc:   deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage},
+		fc:   apicfg.Features{OIDCAuthentication: apicfg.Enabled},
+		rev: revision("bar", "foo",
+			withContainers([]corev1.Container{userContainerOnPort(8080)}),
+			WithRevisionAnnotations(map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"}),
+		),
+		want: podSpec([]corev1.Container{
+			servingContainer(withEnvVar("PORT", "8080")),
+			oauth2ProxyContainer(9095, 8080, []corev1.EnvFromSource{testSecretRef}),
+			queueContainer(withEnvVar("USER_PORT", "9095")),
+		}),
+	}, {
+		name: "oidc enabled without annotation is unchanged",
+		dc:   deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage},
+		fc:   apicfg.Features{OIDCAuthentication: apicfg.Enabled},
+		rev: revision("bar", "foo",
+			withContainers([]corev1.Container{userContainerOnPort(8080)}),
+		),
+		want: podSpec([]corev1.Container{
+			servingContainer(withEnvVar("PORT", "8080")),
+			queueContainer(),
+		}),
+	}, {
+		name: "oidc disabled with secret annotation is unchanged",
+		dc:   deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage},
+		fc:   apicfg.Features{OIDCAuthentication: apicfg.Disabled},
+		rev: revision("bar", "foo",
+			withContainers([]corev1.Container{userContainerOnPort(8080)}),
+			WithRevisionAnnotations(map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"}),
+		),
+		want: podSpec([]corev1.Container{
+			servingContainer(withEnvVar("PORT", "8080")),
+			queueContainer(),
+		}),
+	}, {
+		name: "oidc enabled with multiple containers places oauth2-proxy after all user containers",
+		dc:   deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage},
+		fc:   apicfg.Features{OIDCAuthentication: apicfg.Enabled},
+		rev: revision("bar", "foo",
+			withContainers([]corev1.Container{
+				userContainerOnPort(8888),
+				{Name: sidecarContainerName, Image: "ubuntu"},
+			}),
+			WithRevisionAnnotations(map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"}),
+		),
+		want: podSpec([]corev1.Container{
+			servingContainer(
+				func(c *corev1.Container) { c.Ports[0].ContainerPort = 8888 },
+				withEnvVar("PORT", "8888"),
+			),
+			sidecarContainer(sidecarContainerName),
+			oauth2ProxyContainer(9095, 8888, []corev1.EnvFromSource{testSecretRef}),
+			queueContainer(
+				withEnvVar("USER_PORT", "9095"),
+				withEnvVar("SERVING_READINESS_PROBE", `{"tcpSocket":{"port":8888,"host":"127.0.0.1"}}`),
+			),
+		}),
+	}, {
+		name: "oidc enabled with user port 9095 moves oauth2-proxy to 9096",
+		dc:   deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage},
+		fc:   apicfg.Features{OIDCAuthentication: apicfg.Enabled},
+		rev: revision("bar", "foo",
+			withContainers([]corev1.Container{userContainerOnPort(9095)}),
+			WithRevisionAnnotations(map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"}),
+		),
+		want: podSpec([]corev1.Container{
+			servingContainer(
+				func(c *corev1.Container) { c.Ports[0].ContainerPort = 9095 },
+				withEnvVar("PORT", "9095"),
+			),
+			oauth2ProxyContainer(9096, 9095, []corev1.EnvFromSource{testSecretRef}),
+			queueContainer(
+				withEnvVar("USER_PORT", "9096"),
+				withEnvVar("SERVING_READINESS_PROBE", `{"tcpSocket":{"port":9095,"host":"127.0.0.1"}}`),
+			),
+		}),
+	}, {
+		name: "oidc enabled with var-log collection mounts logs into oauth2-proxy",
+		oc:   observability.Config{EnableVarLogCollection: true},
+		dc:   deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage},
+		fc:   apicfg.Features{OIDCAuthentication: apicfg.Enabled},
+		rev: revision("bar", "foo",
+			withContainers([]corev1.Container{userContainerOnPort(8080)}),
+			WithRevisionAnnotations(map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"}),
+		),
+		want: podSpec(
+			[]corev1.Container{
+				servingContainer(withVarLogMount(servingContainerName)),
+				func() corev1.Container {
+					c := oauth2ProxyContainer(9095, 8080, []corev1.EnvFromSource{testSecretRef})
+					withVarLogMount(Oauth2ProxyContainerName)(&c)
+					return c
+				}(),
+				queueContainer(
+					withEnvVar("USER_PORT", "9095"),
+					withEnvVar("OBSERVABILITY_CONFIG", `{"tracing":{},"metrics":{},"runtime":{},"requestMetrics":{},"EnableVarLogCollection":true}`),
+				),
+			},
+			withAppendedVolumes(varLogVolume),
+		),
+	}, {
+		name: "oidc enabled with secret and configmap annotations sets envFrom with secret last",
+		dc:   deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage},
+		fc:   apicfg.Features{OIDCAuthentication: apicfg.Enabled},
+		rev: revision("bar", "foo",
+			withContainers([]corev1.Container{userContainerOnPort(8080)}),
+			WithRevisionAnnotations(map[string]string{
+				Oauth2ProxyConfigSecretAnnotation:    "my-secret",
+				Oauth2ProxyConfigConfigMapAnnotation: "my-configmap",
+			}),
+		),
+		want: podSpec([]corev1.Container{
+			servingContainer(withEnvVar("PORT", "8080")),
+			oauth2ProxyContainer(9095, 8080, []corev1.EnvFromSource{testConfigMapRef, testSecretRef}),
+			queueContainer(withEnvVar("USER_PORT", "9095")),
+		}),
 	}}
 
 	for _, test := range tests {
@@ -2125,5 +2243,45 @@ func TestMakeDeployment(t *testing.T) {
 				t.Errorf("MakeDeployment (-want, +got) =\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestMakeDeploymentWithOIDC(t *testing.T) {
+	rev := revision("bar", "foo",
+		withContainers([]corev1.Container{userContainerOnPort(8080)}),
+		WithRevisionAnnotations(map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"}),
+	)
+	dc := deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage}
+	cfg := revConfig()
+	cfg.Deployment = &dc
+	cfg.Features = &apicfg.Features{OIDCAuthentication: apicfg.Enabled}
+
+	got, err := MakeDeployment(rev, cfg)
+	if err != nil {
+		t.Fatal("MakeDeployment returned error:", err)
+	}
+
+	gotContainers := got.Spec.Template.Spec.Containers
+	var names []string
+	for _, c := range gotContainers {
+		names = append(names, c.Name)
+	}
+	wantNames := []string{servingContainerName, Oauth2ProxyContainerName, QueueContainerName}
+	if diff := cmp.Diff(wantNames, names); diff != "" {
+		t.Fatalf("container names (-want, +got) =\n%s", diff)
+	}
+
+	if diff := cmp.Diff(oauth2ProxyContainer(9095, 8080, []corev1.EnvFromSource{testSecretRef}), gotContainers[1]); diff != "" {
+		t.Errorf("oauth2-proxy container (-want, +got) =\n%s", diff)
+	}
+
+	var userPort string
+	for _, env := range gotContainers[2].Env {
+		if env.Name == "USER_PORT" {
+			userPort = env.Value
+		}
+	}
+	if userPort != "9095" {
+		t.Errorf("queue-proxy USER_PORT = %q, want %q", userPort, "9095")
 	}
 }
