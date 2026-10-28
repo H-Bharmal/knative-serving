@@ -25,6 +25,9 @@ const (
 
 	// Oauth2ProxyConfigConfigMapAnnotation is the annotation that holds the name of Kubernetes Configmap holding the oauth2-proxy additional/optional configuration
 	Oauth2ProxyConfigConfigMapAnnotation = "codeengine.cloud.ibm.com/oauth2-proxy-config-configmap"
+
+	// Oauth2ProxyConfigSecretType is the Kubernetes Secret type that the secret referenced by Oauth2ProxyConfigSecretAnnotation must have.
+	Oauth2ProxyConfigSecretType corev1.SecretType = "codeengine.cloud.ibm.com/oauth2"
 )
 
 const (
