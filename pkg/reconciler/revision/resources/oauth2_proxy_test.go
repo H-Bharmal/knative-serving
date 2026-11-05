@@ -1,5 +1,5 @@
 /*
-Copyright 2025 IBM Corp.
+Copyright 2026 IBM Corp.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -80,21 +80,21 @@ func TestGetOauth2ProxyPort(t *testing.T) {
 		rev  *v1.Revision
 		want int32
 	}{{
-		name: "user container and user sidecar use 9095 and 9096",
+		name: "user container and user sidecar use 4180 and 4181",
 		rev: &v1.Revision{
 			Spec: v1.RevisionSpec{
 				PodSpec: corev1.PodSpec{
 					Containers: []corev1.Container{{
 						Name:  "user-container",
-						Ports: []corev1.ContainerPort{{ContainerPort: 9095}},
+						Ports: []corev1.ContainerPort{{ContainerPort: 4180}},
 					}, {
 						Name:  "user-sidecar",
-						Ports: []corev1.ContainerPort{{ContainerPort: 9096}},
+						Ports: []corev1.ContainerPort{{ContainerPort: 4181}},
 					}},
 				},
 			},
 		},
-		want: 9097,
+		want: 4182,
 	}}
 
 	for _, test := range tests {
@@ -196,7 +196,7 @@ func TestMakeOauth2ProxyContainer(t *testing.T) {
 			withContainers(userContainer()),
 			WithRevisionAnnotations(map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"}),
 		),
-		want: wantContainer(9095, v1.DefaultUserPort, []corev1.EnvFromSource{secretRef}),
+		want: wantContainer(4180, v1.DefaultUserPort, []corev1.EnvFromSource{secretRef}),
 	}, {
 		name: "secret and configmap annotations, secret takes precedence",
 		rev: revision("bar", "foo",
@@ -206,21 +206,21 @@ func TestMakeOauth2ProxyContainer(t *testing.T) {
 				Oauth2ProxyConfigConfigMapAnnotation: "my-configmap",
 			}),
 		),
-		want: wantContainer(9095, v1.DefaultUserPort, []corev1.EnvFromSource{configMapRef, secretRef}),
+		want: wantContainer(4180, v1.DefaultUserPort, []corev1.EnvFromSource{configMapRef, secretRef}),
 	}, {
 		name: "custom user port is used as upstream",
 		rev: revision("bar", "foo",
 			withContainers(userContainer(corev1.ContainerPort{ContainerPort: 8888})),
 			WithRevisionAnnotations(map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"}),
 		),
-		want: wantContainer(9095, 8888, []corev1.EnvFromSource{secretRef}),
+		want: wantContainer(4180, 8888, []corev1.EnvFromSource{secretRef}),
 	}, {
 		name: "user port collides with default proxy port",
 		rev: revision("bar", "foo",
-			withContainers(userContainer(corev1.ContainerPort{ContainerPort: 9095})),
+			withContainers(userContainer(corev1.ContainerPort{ContainerPort: 4180})),
 			WithRevisionAnnotations(map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"}),
 		),
-		want: wantContainer(9096, 9095, []corev1.EnvFromSource{secretRef}),
+		want: wantContainer(4181, 4180, []corev1.EnvFromSource{secretRef}),
 	}}
 
 	for _, test := range tests {

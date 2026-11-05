@@ -1906,8 +1906,8 @@ func TestMakePodSpec(t *testing.T) {
 		),
 		want: podSpec([]corev1.Container{
 			servingContainer(withEnvVar("PORT", "8080")),
-			oauth2ProxyContainer(9095, 8080, []corev1.EnvFromSource{testSecretRef}),
-			queueContainer(withEnvVar("USER_PORT", "9095")),
+			oauth2ProxyContainer(4180, 8080, []corev1.EnvFromSource{testSecretRef}),
+			queueContainer(withEnvVar("USER_PORT", "4180")),
 		}),
 	}, {
 		name: "oidc enabled without annotation is unchanged",
@@ -1945,28 +1945,28 @@ func TestMakePodSpec(t *testing.T) {
 				withEnvVar("PORT", "8888"),
 			),
 			sidecarContainer(sidecarContainerName),
-			oauth2ProxyContainer(9095, 8888, []corev1.EnvFromSource{testSecretRef}),
+			oauth2ProxyContainer(4180, 8888, []corev1.EnvFromSource{testSecretRef}),
 			queueContainer(
-				withEnvVar("USER_PORT", "9095"),
+				withEnvVar("USER_PORT", "4180"),
 				withEnvVar("SERVING_READINESS_PROBE", `{"tcpSocket":{"port":8888,"host":"127.0.0.1"}}`),
 			),
 		}),
 	}, {
-		name: "oidc enabled with user port 9095 moves oauth2-proxy to 9096",
+		name: "oidc enabled with user port 4180 moves oauth2-proxy to 4181",
 		oidc: true,
 		rev: revision("bar", "foo",
-			withContainers([]corev1.Container{userContainerOnPort(9095)}),
+			withContainers([]corev1.Container{userContainerOnPort(4180)}),
 			WithRevisionAnnotations(map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"}),
 		),
 		want: podSpec([]corev1.Container{
 			servingContainer(
-				func(c *corev1.Container) { c.Ports[0].ContainerPort = 9095 },
-				withEnvVar("PORT", "9095"),
+				func(c *corev1.Container) { c.Ports[0].ContainerPort = 4180 },
+				withEnvVar("PORT", "4180"),
 			),
-			oauth2ProxyContainer(9096, 9095, []corev1.EnvFromSource{testSecretRef}),
+			oauth2ProxyContainer(4181, 4180, []corev1.EnvFromSource{testSecretRef}),
 			queueContainer(
-				withEnvVar("USER_PORT", "9096"),
-				withEnvVar("SERVING_READINESS_PROBE", `{"tcpSocket":{"port":9095,"host":"127.0.0.1"}}`),
+				withEnvVar("USER_PORT", "4181"),
+				withEnvVar("SERVING_READINESS_PROBE", `{"tcpSocket":{"port":4180,"host":"127.0.0.1"}}`),
 			),
 		}),
 	}, {
@@ -1981,12 +1981,12 @@ func TestMakePodSpec(t *testing.T) {
 			[]corev1.Container{
 				servingContainer(withVarLogMount(servingContainerName)),
 				func() corev1.Container {
-					c := oauth2ProxyContainer(9095, 8080, []corev1.EnvFromSource{testSecretRef})
+					c := oauth2ProxyContainer(4180, 8080, []corev1.EnvFromSource{testSecretRef})
 					withVarLogMount(Oauth2ProxyContainerName)(&c)
 					return c
 				}(),
 				queueContainer(
-					withEnvVar("USER_PORT", "9095"),
+					withEnvVar("USER_PORT", "4180"),
 					withEnvVar("OBSERVABILITY_CONFIG", `{"tracing":{},"metrics":{},"runtime":{},"requestMetrics":{},"EnableVarLogCollection":true}`),
 				),
 			},
@@ -2004,8 +2004,8 @@ func TestMakePodSpec(t *testing.T) {
 		),
 		want: podSpec([]corev1.Container{
 			servingContainer(withEnvVar("PORT", "8080")),
-			oauth2ProxyContainer(9095, 8080, []corev1.EnvFromSource{testConfigMapRef, testSecretRef}),
-			queueContainer(withEnvVar("USER_PORT", "9095")),
+			oauth2ProxyContainer(4180, 8080, []corev1.EnvFromSource{testConfigMapRef, testSecretRef}),
+			queueContainer(withEnvVar("USER_PORT", "4180")),
 		}),
 	}}
 
@@ -2266,7 +2266,7 @@ func TestMakeDeploymentWithOIDC(t *testing.T) {
 		t.Fatalf("container names (-want, +got) =\n%s", diff)
 	}
 
-	if diff := cmp.Diff(oauth2ProxyContainer(9095, 8080, []corev1.EnvFromSource{testSecretRef}), gotContainers[1]); diff != "" {
+	if diff := cmp.Diff(oauth2ProxyContainer(4180, 8080, []corev1.EnvFromSource{testSecretRef}), gotContainers[1]); diff != "" {
 		t.Errorf("oauth2-proxy container (-want, +got) =\n%s", diff)
 	}
 
@@ -2276,7 +2276,7 @@ func TestMakeDeploymentWithOIDC(t *testing.T) {
 			userPort = env.Value
 		}
 	}
-	if userPort != "9095" {
-		t.Errorf("queue-proxy USER_PORT = %q, want %q", userPort, "9095")
+	if userPort != "4180" {
+		t.Errorf("queue-proxy USER_PORT = %q, want %q", userPort, "4180")
 	}
 }

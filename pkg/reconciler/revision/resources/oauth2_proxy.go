@@ -1,5 +1,5 @@
 /*
-Copyright 2025 IBM Corp.
+Copyright 2026 IBM Corp.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -36,6 +36,8 @@ const (
 
 	// Oauth2ProxyConfigSecretType is the Kubernetes Secret type that the secret referenced by Oauth2ProxyConfigSecretAnnotation must have.
 	Oauth2ProxyConfigSecretType corev1.SecretType = "codeengine.cloud.ibm.com/oauth2"
+
+	Oauth2ProxyContainerName = "ce-oauth2-proxy"
 )
 
 const (
@@ -47,7 +49,7 @@ const (
 
 type oauth2ProxyRevisionConfig struct {
 	ConfigSecretName    string
-	ConfigConfigmapName string
+	ConfigConfigMapName string
 }
 
 // IsOIDCAuthenticationEnabled reports whether the oauth2-proxy sidecar should be injected
@@ -70,11 +72,9 @@ func MakeOauth2ProxyContainer(rev *v1.Revision, _ *config.Config) (corev1.Contai
 	oauth2ProxyPort := getOauth2ProxyPort(rev)
 	oauth2ProxyConfig := oauth2ProxyRevisionConfig{
 		ConfigSecretName:    rev.Annotations[Oauth2ProxyConfigSecretAnnotation],
-		ConfigConfigmapName: rev.Annotations[Oauth2ProxyConfigConfigMapAnnotation],
+		ConfigConfigMapName: rev.Annotations[Oauth2ProxyConfigConfigMapAnnotation],
 	}
 
-	// THINK: should it be here or in deploy.go and pass the user port?
-	// since, if there is any modification in user-port in code after MakeOauth2ProxyContainer, we would be using wrong user-port. Can it happen ?
 	// getUserPort is a pure read of rev.Spec hence safe to call independently here.
 	// userPort never changes after container construction, so this value is always correct.
 	userPort := getUserPort(rev)
@@ -90,7 +90,7 @@ func MakeOauth2ProxyContainer(rev *v1.Revision, _ *config.Config) (corev1.Contai
 
 		// The current append order causes the secret env have precendence over configmap.
 		EnvFrom: append(
-			buildOauth2ProxyEnvFromConfigMap(oauth2ProxyConfig.ConfigConfigmapName),
+			buildOauth2ProxyEnvFromConfigMap(oauth2ProxyConfig.ConfigConfigMapName),
 			buildOauth2ProxyEnvFromSecret(oauth2ProxyConfig.ConfigSecretName)...,
 		),
 		ReadinessProbe: buildOauth2ProxyReadinessProbe(oauth2ProxyPort),
@@ -150,8 +150,8 @@ func buildOauth2ProxyReadinessProbe(port int32) *corev1.Probe {
 }
 
 func getOauth2ProxyPort(rev *v1.Revision) int32 {
-	// TODO: change the oauth2-proxy port to default 4180, set it as env as well (if similar is done in queue-proxy)
-	port := int32(9095)
+
+	port := int32(4180)
 	for {
 		used := false
 		for _, container := range append(rev.Spec.InitContainers, rev.Spec.Containers...) {
@@ -169,5 +169,17 @@ func getOauth2ProxyPort(rev *v1.Revision) int32 {
 			return port
 		}
 		port++
+	}
+}
+
+// rewriteQueueProxyUserPort overwrites the USER_PORT env var on the queue-proxy container
+// so that it points at newPort instead of the original user-container port. This is required when the oauth2-proxy sidecar is injected: the flow chain becomes queue-proxy → oauth2-proxy → user container, so queue-proxy must forward to oauth2-proxy.
+// Note: the queue-proxy still probes the user-container.
+func rewriteQueueProxyUserPort(queueContainer *corev1.Container, newPort int32) {
+	for i := range queueContainer.Env {
+		if queueContainer.Env[i].Name == "USER_PORT" {
+			queueContainer.Env[i].Value = strconv.Itoa(int(newPort))
+			return
+		}
 	}
 }

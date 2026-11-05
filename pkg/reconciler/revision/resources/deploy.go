@@ -337,19 +337,6 @@ func getUserPort(rev *v1.Revision) int32 {
 	return v1.DefaultUserPort
 }
 
-// rewriteQueueProxyUserPort overwrites the USER_PORT env var on the queue-proxy container
-// so that it points at newPort instead of the original user-container port. This is required
-// when the oauth2-proxy sidecar is injected: the request chain becomes
-// queue-proxy → oauth2-proxy → user container, so queue-proxy must forward to oauth2-proxy.
-func rewriteQueueProxyUserPort(queueContainer *corev1.Container, newPort int32) {
-	for i := range queueContainer.Env {
-		if queueContainer.Env[i].Name == "USER_PORT" {
-			queueContainer.Env[i].Value = strconv.Itoa(int(newPort))
-			return
-		}
-	}
-}
-
 func buildContainerPorts(userPort int32) []corev1.ContainerPort {
 	return []corev1.ContainerPort{{
 		Name:          v1.UserPortName,
