@@ -8,6 +8,7 @@ you may not use this file except in compliance with the License.
 package resources
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -21,6 +22,9 @@ import (
 const (
 	// OIDCAuthenticationEnvVar is the environment variable, set on the controller and webhook, that enables the OIDC authentication feature when it has a true value.
 	OIDCAuthenticationEnvVar = "CE_OIDC_AUTHENTICATION"
+
+	// Oauth2ProxyImageEnvVar is the environment variable, set on the controller, that holds the oauth2-proxy sidecar image.
+	Oauth2ProxyImageEnvVar = "OAUTH2_PROXY_IMAGE"
 
 	// Oauth2ProxyConfigSecretAnnotation is the Code Engine per-ksvc annotation that names
 	// the Kubernetes Secret holding the oauth2-proxy configuration.
@@ -57,7 +61,12 @@ func IsOIDCAuthenticationEnabled(rev *v1.Revision) bool {
 		rev.Annotations[Oauth2ProxyConfigSecretAnnotation] != ""
 }
 
-func MakeOauth2ProxyContainer(rev *v1.Revision, cfg *config.Config) (corev1.Container, error) {
+func MakeOauth2ProxyContainer(rev *v1.Revision, _ *config.Config) (corev1.Container, error) {
+	oauth2ProxyImage := os.Getenv(Oauth2ProxyImageEnvVar)
+	if oauth2ProxyImage == "" {
+		return corev1.Container{}, errors.New(Oauth2ProxyImageEnvVar + " environment variable cannot be empty or unset")
+	}
+
 	oauth2ProxyPort := getOauth2ProxyPort(rev)
 	oauth2ProxyConfig := oauth2ProxyRevisionConfig{
 		ConfigSecretName:    rev.Annotations[Oauth2ProxyConfigSecretAnnotation],
@@ -72,7 +81,7 @@ func MakeOauth2ProxyContainer(rev *v1.Revision, cfg *config.Config) (corev1.Cont
 
 	oauth2ProxyContainer := corev1.Container{
 		Name:  Oauth2ProxyContainerName,
-		Image: cfg.Deployment.Oauth2ProxySidecarImage,
+		Image: oauth2ProxyImage,
 		Ports: []corev1.ContainerPort{{
 			Name:          oauth2ProxyContainerPortName,
 			ContainerPort: oauth2ProxyPort,

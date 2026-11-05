@@ -132,9 +132,8 @@ func initialScaleZeroASConfig() *autoscalerconfig.Config {
 func defaultConfig() *config.Config {
 	ac, _ := asconfig.NewConfigFromMap(defaultConfigMapData())
 	deploymentConfig, _ := deployment.NewConfigFromMap(map[string]string{
-		deployment.QueueSidecarImageKey:       "bob",
-		deployment.ProgressDeadlineKey:        progressDeadline.String(),
-		deployment.Oauth2ProxySidecarImageKey: "myoauth2proxyimage",
+		deployment.QueueSidecarImageKey: "bob",
+		deployment.ProgressDeadlineKey:  progressDeadline.String(),
 	})
 	networkConfig, _ := netcfg.NewConfigFromMap(map[string]string{
 		netcfg.SystemInternalTLSKey: "disabled",
@@ -160,8 +159,7 @@ func newConfigWatcher() configmap.Watcher {
 			Name:      deployment.ConfigName,
 		},
 		Data: map[string]string{
-			deployment.QueueSidecarImageKey:       "covid is here",
-			deployment.Oauth2ProxySidecarImageKey: "myoauth2proxyimage",
+			deployment.QueueSidecarImageKey: "covid is here",
 		},
 	}, &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1253,8 +1251,7 @@ func TestGlobalResyncOnUpdateAutoscalerConfigMap(t *testing.T) {
 			Namespace: system.Namespace(),
 		},
 		Data: map[string]string{
-			deployment.QueueSidecarImageKey:       "i'm on a bike",
-			deployment.Oauth2ProxySidecarImageKey: "myoauth2proxyimage",
+			deployment.QueueSidecarImageKey: "i'm on a bike",
 		},
 	})
 	watcher.OnChange(&corev1.ConfigMap{

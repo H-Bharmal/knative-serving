@@ -225,12 +225,9 @@ func TestMakeOauth2ProxyContainer(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			dc := deploymentConfig
-			dc.Oauth2ProxySidecarImage = testOauth2ProxyImage
-			cfg := revConfig()
-			cfg.Deployment = &dc
+			t.Setenv(Oauth2ProxyImageEnvVar, testOauth2ProxyImage)
 
-			got, err := MakeOauth2ProxyContainer(test.rev, cfg)
+			got, err := MakeOauth2ProxyContainer(test.rev, revConfig())
 			if err != nil {
 				t.Fatal("MakeOauth2ProxyContainer returned error:", err)
 			}

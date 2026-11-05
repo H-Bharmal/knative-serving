@@ -90,8 +90,7 @@ func TestControllerCanReconcile(t *testing.T) {
 				Name:      deployment.ConfigName,
 			},
 			Data: map[string]string{
-				deployment.QueueSidecarImageKey:       "motorbike-sidecar",
-				deployment.Oauth2ProxySidecarImageKey: "myoauth2proxyimage",
+				deployment.QueueSidecarImageKey: "motorbike-sidecar",
 			},
 		},
 		&corev1.ConfigMap{

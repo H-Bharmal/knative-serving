@@ -1899,7 +1899,6 @@ func TestMakePodSpec(t *testing.T) {
 		}, withRuntimeClass("kata")),
 	}, {
 		name: "oidc enabled with secret annotation injects oauth2-proxy before queue-proxy",
-		dc:   deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage},
 		oidc: true,
 		rev: revision("bar", "foo",
 			withContainers([]corev1.Container{userContainerOnPort(8080)}),
@@ -1912,7 +1911,6 @@ func TestMakePodSpec(t *testing.T) {
 		}),
 	}, {
 		name: "oidc enabled without annotation is unchanged",
-		dc:   deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage},
 		oidc: true,
 		rev: revision("bar", "foo",
 			withContainers([]corev1.Container{userContainerOnPort(8080)}),
@@ -1923,7 +1921,6 @@ func TestMakePodSpec(t *testing.T) {
 		}),
 	}, {
 		name: "oidc disabled with secret annotation is unchanged",
-		dc:   deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage},
 		rev: revision("bar", "foo",
 			withContainers([]corev1.Container{userContainerOnPort(8080)}),
 			WithRevisionAnnotations(map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"}),
@@ -1934,7 +1931,6 @@ func TestMakePodSpec(t *testing.T) {
 		}),
 	}, {
 		name: "oidc enabled with multiple containers places oauth2-proxy after all user containers",
-		dc:   deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage},
 		oidc: true,
 		rev: revision("bar", "foo",
 			withContainers([]corev1.Container{
@@ -1957,7 +1953,6 @@ func TestMakePodSpec(t *testing.T) {
 		}),
 	}, {
 		name: "oidc enabled with user port 9095 moves oauth2-proxy to 9096",
-		dc:   deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage},
 		oidc: true,
 		rev: revision("bar", "foo",
 			withContainers([]corev1.Container{userContainerOnPort(9095)}),
@@ -1977,7 +1972,6 @@ func TestMakePodSpec(t *testing.T) {
 	}, {
 		name: "oidc enabled with var-log collection mounts logs into oauth2-proxy",
 		oc:   observability.Config{EnableVarLogCollection: true},
-		dc:   deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage},
 		oidc: true,
 		rev: revision("bar", "foo",
 			withContainers([]corev1.Container{userContainerOnPort(8080)}),
@@ -2000,7 +1994,6 @@ func TestMakePodSpec(t *testing.T) {
 		),
 	}, {
 		name: "oidc enabled with secret and configmap annotations sets envFrom with secret last",
-		dc:   deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage},
 		oidc: true,
 		rev: revision("bar", "foo",
 			withContainers([]corev1.Container{userContainerOnPort(8080)}),
@@ -2019,6 +2012,7 @@ func TestMakePodSpec(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv(OIDCAuthenticationEnvVar, strconv.FormatBool(test.oidc))
+			t.Setenv(Oauth2ProxyImageEnvVar, testOauth2ProxyImage)
 			cfg := revConfig()
 			cfg.Observability = &test.oc
 			cfg.Deployment = &test.dc
@@ -2253,10 +2247,9 @@ func TestMakeDeploymentWithOIDC(t *testing.T) {
 		withContainers([]corev1.Container{userContainerOnPort(8080)}),
 		WithRevisionAnnotations(map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"}),
 	)
-	dc := deployment.Config{Oauth2ProxySidecarImage: testOauth2ProxyImage}
 	cfg := revConfig()
-	cfg.Deployment = &dc
 	t.Setenv(OIDCAuthenticationEnvVar, "true")
+	t.Setenv(Oauth2ProxyImageEnvVar, testOauth2ProxyImage)
 
 	got, err := MakeDeployment(rev, cfg)
 	if err != nil {
