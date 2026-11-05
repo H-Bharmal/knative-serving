@@ -9,15 +9,19 @@ package resources
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	apiconfig "knative.dev/serving/pkg/apis/config"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	"knative.dev/serving/pkg/reconciler/revision/config"
 )
 
 const (
+	// OIDCAuthenticationEnvVar is the environment variable, set on the controller and webhook, that enables the OIDC authentication feature when it has a true value.
+	OIDCAuthenticationEnvVar = "CE_OIDC_AUTHENTICATION"
+
 	// Oauth2ProxyConfigSecretAnnotation is the Code Engine per-ksvc annotation that names
 	// the Kubernetes Secret holding the oauth2-proxy configuration.
 	// When present, the revision reconciler injects the ce-oauth2-proxy sidecar.
@@ -44,10 +48,12 @@ type oauth2ProxyRevisionConfig struct {
 
 // IsOIDCAuthenticationEnabled reports whether the oauth2-proxy sidecar should be injected
 // for this revision. It checks 2 conditions:
-//  1. operator-level feature flag codeengine.oidc-authentication is Enabled.
+//  1. codeengine-level feature is enabled via the CE_OIDC_AUTHENTICATION environment variable.
 //  2. Oauth2ProxyConfigSecretAnnotation that holds config secret name. (This is the per-revision).
-func IsOIDCAuthenticationEnabled(rev *v1.Revision, cfg *config.Config) bool {
-	return cfg.Features.OIDCAuthentication == apiconfig.Enabled &&
+func IsOIDCAuthenticationEnabled(rev *v1.Revision) bool {
+	enabled, _ := strconv.ParseBool(os.Getenv(OIDCAuthenticationEnvVar))
+
+	return enabled &&
 		rev.Annotations[Oauth2ProxyConfigSecretAnnotation] != ""
 }
 

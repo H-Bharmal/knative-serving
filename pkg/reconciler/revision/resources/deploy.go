@@ -212,7 +212,7 @@ func makePodSpec(rev *v1.Revision, cfg *config.Config) (*corev1.PodSpec, error) 
 
 	containers := BuildUserContainers(rev, cfg.Features)
 
-	if IsOIDCAuthenticationEnabled(rev, cfg) {
+	if IsOIDCAuthenticationEnabled(rev) {
 		oauth2ProxyContainer, err := MakeOauth2ProxyContainer(rev, cfg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create ce-oauth2-proxy container: %w", err)

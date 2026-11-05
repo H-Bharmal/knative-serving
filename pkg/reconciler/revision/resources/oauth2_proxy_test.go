@@ -16,49 +16,48 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	apicfg "knative.dev/serving/pkg/apis/config"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 )
 
 func TestIsOIDCAuthenticationEnabled(t *testing.T) {
 	tests := []struct {
 		name        string
-		flag        apicfg.Flag
+		env         string
 		annotations map[string]string
 		want        bool
 	}{{
-		name:        "flag enabled and secret annotation set",
-		flag:        apicfg.Enabled,
+		name:        "env enabled and secret annotation set",
+		env:         "true",
 		annotations: map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"},
 		want:        true,
 	}, {
-		name:        "flag disabled and secret annotation set",
-		flag:        apicfg.Disabled,
+		name:        "env disabled and secret annotation set",
+		env:         "false",
 		annotations: map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"},
 		want:        false,
 	}, {
-		name:        "flag allowed and secret annotation set",
-		flag:        apicfg.Allowed,
+		name:        "env unset and secret annotation set",
+		env:         "",
 		annotations: map[string]string{Oauth2ProxyConfigSecretAnnotation: "my-secret"},
 		want:        false,
 	}, {
-		name:        "flag enabled and annotation missing",
-		flag:        apicfg.Enabled,
+		name:        "env enabled and annotation missing",
+		env:         "true",
 		annotations: map[string]string{"unrelated": "value"},
 		want:        false,
 	}, {
-		name:        "flag enabled and secret annotation empty",
-		flag:        apicfg.Enabled,
+		name:        "env enabled and secret annotation empty",
+		env:         "true",
 		annotations: map[string]string{Oauth2ProxyConfigSecretAnnotation: ""},
 		want:        false,
 	}, {
-		name:        "flag enabled and only configmap annotation set",
-		flag:        apicfg.Enabled,
+		name:        "env enabled and only configmap annotation set",
+		env:         "true",
 		annotations: map[string]string{Oauth2ProxyConfigConfigMapAnnotation: "my-configmap"},
 		want:        false,
 	}, {
-		name:        "flag enabled and nil annotations",
-		flag:        apicfg.Enabled,
+		name:        "env enabled and nil annotations",
+		env:         "true",
 		annotations: nil,
 		want:        false,
 	}}
@@ -66,10 +65,9 @@ func TestIsOIDCAuthenticationEnabled(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			rev := &v1.Revision{ObjectMeta: metav1.ObjectMeta{Annotations: test.annotations}}
-			cfg := revConfig()
-			cfg.Features = &apicfg.Features{OIDCAuthentication: test.flag}
+			t.Setenv(OIDCAuthenticationEnvVar, test.env)
 
-			if got := IsOIDCAuthenticationEnabled(rev, cfg); got != test.want {
+			if got := IsOIDCAuthenticationEnabled(rev); got != test.want {
 				t.Errorf("IsOIDCAuthenticationEnabled() = %v, want %v", got, test.want)
 			}
 		})

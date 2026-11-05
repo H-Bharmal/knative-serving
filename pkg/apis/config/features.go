@@ -78,7 +78,6 @@ const (
 	FeaturePodSpecTopologySpreadConstraints = "kubernetes.podspec-topologyspreadconstraints"
 	FeaturePodSpecVolumesEphemeral          = "kubernetes.podspec-volumes-ephemeral"
 	FeaturePodSpecVolumesImage              = "kubernetes.podspec-volumes-image"
-	FeatureOIDCAuthentication               = "codeengine.oidc-authentication"
 )
 
 func defaultFeaturesConfig() *Features {
@@ -116,7 +115,6 @@ func defaultFeaturesConfig() *Features {
 		SecurePodDefaults:                Disabled,
 		TagHeaderBasedRouting:            Disabled,
 		AutoDetectHTTP2:                  Disabled,
-		OIDCAuthentication:               Disabled,
 	}
 }
 
@@ -158,7 +156,6 @@ func NewFeaturesConfigFromMap(data map[string]string) (*Features, error) {
 		asFlag(FeaturePodSpecShareProcessNamespace, &nc.PodSpecShareProcessNamespace),
 		asFlag(FeaturePodSpecTolerations, &nc.PodSpecTolerations),
 		asFlag(FeaturePodSpecTopologySpreadConstraints, &nc.PodSpecTopologySpreadConstraints),
-		asFlag(FeatureOIDCAuthentication, &nc.OIDCAuthentication),
 	); err != nil {
 		return nil, err
 	}
@@ -205,7 +202,6 @@ type Features struct {
 	SecurePodDefaults                Flag
 	TagHeaderBasedRouting            Flag
 	AutoDetectHTTP2                  Flag
-	OIDCAuthentication               Flag
 }
 
 // asFlag parses the value at key as a Flag into the target, if it exists.
