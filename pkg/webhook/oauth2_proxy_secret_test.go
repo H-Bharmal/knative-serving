@@ -18,7 +18,6 @@ import (
 	fakekubeclient "knative.dev/pkg/client/injection/kube/client/fake"
 	"knative.dev/pkg/logging"
 	logtesting "knative.dev/pkg/logging/testing"
-	apisconfig "knative.dev/serving/pkg/apis/config"
 	"knative.dev/serving/pkg/reconciler/revision/resources"
 )
 
@@ -44,50 +43,34 @@ func TestValidateOauth2ProxyConfigSecret(t *testing.T) {
 	withSecret := map[string]interface{}{resources.Oauth2ProxyConfigSecretAnnotation: "oidc-secret"}
 
 	tests := []struct {
-		name    string
-		enabled bool
-		secret  *corev1.Secret
-		data    map[string]interface{}
-		want    string
+		name   string
+		secret *corev1.Secret
+		data   map[string]interface{}
+		want   string
 	}{{
-		name:    "secret of the correct type",
-		enabled: true,
-		secret:  secretOfType(resources.Oauth2ProxyConfigSecretType),
-		data:    service(withSecret),
+		name:   "secret of the correct type",
+		secret: secretOfType(resources.Oauth2ProxyConfigSecretType),
+		data:   service(withSecret),
 	}, {
-		name:    "opaque secret",
-		enabled: true,
-		secret:  secretOfType(corev1.SecretTypeOpaque),
-		data:    service(withSecret),
-		want:    `must be of type "codeengine.cloud.ibm.com/oauth2"`,
+		name:   "opaque secret",
+		secret: secretOfType(corev1.SecretTypeOpaque),
+		data:   service(withSecret),
+		want:   `must be of type "codeengine.cloud.ibm.com/oauth2"`,
 	}, {
-		name:    "other secret type",
-		enabled: true,
-		secret:  secretOfType(corev1.SecretTypeTLS),
-		data:    service(withSecret),
-		want:    `must be of type "codeengine.cloud.ibm.com/oauth2"`,
+		name:   "other secret type",
+		secret: secretOfType(corev1.SecretTypeTLS),
+		data:   service(withSecret),
+		want:   `must be of type "codeengine.cloud.ibm.com/oauth2"`,
 	}, {
-		name:    "secret does not exist",
-		enabled: true,
-		data:    service(withSecret),
-		want:    `was not found in namespace "foo"`,
+		name: "secret does not exist",
+		data: service(withSecret),
+		want: `was not found in namespace "foo"`,
 	}, {
-		name:    "secret does not exist but feature disabled",
-		enabled: false,
-		data:    service(withSecret),
+		name: "no annotation",
+		data: service(map[string]interface{}{}),
 	}, {
-		name:    "no annotation",
-		enabled: true,
-		data:    service(map[string]interface{}{}),
-	}, {
-		name:    "no template",
-		enabled: true,
-		data:    map[string]interface{}{"spec": map[string]interface{}{}},
-	}, {
-		name:    "wrong type but feature disabled",
-		enabled: false,
-		secret:  secretOfType(corev1.SecretTypeOpaque),
-		data:    service(withSecret),
+		name: "no template",
+		data: map[string]interface{}{"spec": map[string]interface{}{}},
 	}}
 
 	for _, test := range tests {
@@ -99,11 +82,6 @@ func TestValidateOauth2ProxyConfigSecret(t *testing.T) {
 					t.Fatal("Failed to create secret:", err) // pragma: allowlist secret
 				}
 			}
-			features := &apisconfig.Features{OIDCAuthentication: apisconfig.Disabled}
-			if test.enabled {
-				features.OIDCAuthentication = apisconfig.Enabled
-			}
-			ctx = apisconfig.ToContext(ctx, &apisconfig.Config{Features: features})
 
 			uns := &unstructured.Unstructured{}
 			uns.SetUnstructuredContent(test.data)

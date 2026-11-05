@@ -15,19 +15,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	kubeclient "knative.dev/pkg/client/injection/kube/client"
-	apisconfig "knative.dev/serving/pkg/apis/config"
 	"knative.dev/serving/pkg/reconciler/revision/resources"
 )
 
 // validateOauth2ProxyConfigSecret rejects resources whose revision template references an
 // oauth2-proxy config secret that is not of type resources.Oauth2ProxyConfigSecretType.
-// It is a no-op if the OIDC authentication feature is not enabled or no secret is referenced.
+// It is a no-op if no secret is referenced.
 // A referenced secret that does not exist is rejected, so the secret must be created first.
 func validateOauth2ProxyConfigSecret(ctx context.Context, uns *unstructured.Unstructured) error {
-	if apisconfig.FromContextOrDefaults(ctx).Features.OIDCAuthentication != apisconfig.Enabled {
-		return nil
-	}
-
 	// Structural problems of the resource are reported by the other validations.
 	name, found, err := unstructured.NestedString(uns.UnstructuredContent(),
 		"spec", "template", "metadata", "annotations", resources.Oauth2ProxyConfigSecretAnnotation)
