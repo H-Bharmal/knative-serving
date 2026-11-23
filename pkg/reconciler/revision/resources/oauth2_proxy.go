@@ -14,6 +14,7 @@ import (
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	"knative.dev/serving/pkg/reconciler/revision/config"
@@ -37,7 +38,21 @@ const (
 	// Oauth2ProxyConfigSecretType is the Kubernetes Secret type that the secret referenced by Oauth2ProxyConfigSecretAnnotation must have.
 	Oauth2ProxyConfigSecretType corev1.SecretType = "codeengine.cloud.ibm.com/oauth2"
 
+	// Oauth2ProxyCPUAnnotation is the annotation that holds the CPU quantity (used for both request and limit) of the oauth2-proxy sidecar.
+	Oauth2ProxyCPUAnnotation = "codeengine.cloud.ibm.com/oauth2-proxy-cpu"
+
+	// Oauth2ProxyMemoryAnnotation is the annotation that holds the memory quantity (used for both request and limit) of the oauth2-proxy sidecar.
+	Oauth2ProxyMemoryAnnotation = "codeengine.cloud.ibm.com/oauth2-proxy-memory"
+
 	Oauth2ProxyContainerName = "ce-oauth2-proxy"
+)
+
+var (
+	// defaultOauth2ProxyCPU is the CPU applied to the oauth2-proxy sidecar when the annotation is missing or invalid.
+	defaultOauth2ProxyCPU = resource.MustParse("125m")
+
+	// defaultOauth2ProxyMemory is the memory applied to the oauth2-proxy sidecar when the annotation is missing or invalid.
+	defaultOauth2ProxyMemory = resource.MustParse("250M")
 )
 
 const (
@@ -94,12 +109,48 @@ func MakeOauth2ProxyContainer(rev *v1.Revision, _ *config.Config) (corev1.Contai
 			buildOauth2ProxyEnvFromSecret(oauth2ProxyConfig.ConfigSecretName)...,
 		),
 		ReadinessProbe: buildOauth2ProxyReadinessProbe(oauth2ProxyPort),
+		Resources:      buildOauth2ProxyResources(rev),
 
 		Lifecycle:       userLifecycle,
 		SecurityContext: queueSecurityContext,
 	}
 
 	return oauth2ProxyContainer, nil
+}
+
+// buildOauth2ProxyResources builds the resource requirements of the oauth2-proxy sidecar. CPU and memory are read from the revision annotations, falling back to the defaults when either annotation is missing or invalid. Requests and Limits are always identical.
+func buildOauth2ProxyResources(rev *v1.Revision) corev1.ResourceRequirements {
+	cpu, memory := parseOauth2ProxyResources(rev.Annotations)
+
+	return corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    cpu.DeepCopy(),
+			corev1.ResourceMemory: memory.DeepCopy(),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    cpu.DeepCopy(),
+			corev1.ResourceMemory: memory.DeepCopy(),
+		},
+	}
+}
+
+// parseOauth2ProxyResources returns the CPU and memory of the oauth2-proxy sidecar. The annotation values are only used if both are set and valid; otherwise both defaults are returned.
+func parseOauth2ProxyResources(annotations map[string]string) (cpu, memory resource.Quantity) {
+	cpuValue, cpuOK := annotations[Oauth2ProxyCPUAnnotation]
+	memoryValue, memoryOK := annotations[Oauth2ProxyMemoryAnnotation]
+	if !cpuOK || !memoryOK {
+		return defaultOauth2ProxyCPU, defaultOauth2ProxyMemory
+	}
+
+	cpu, err := resource.ParseQuantity(cpuValue)
+	if err != nil {
+		return defaultOauth2ProxyCPU, defaultOauth2ProxyMemory
+	}
+	memory, err = resource.ParseQuantity(memoryValue)
+	if err != nil {
+		return defaultOauth2ProxyCPU, defaultOauth2ProxyMemory
+	}
+	return cpu, memory
 }
 
 func buildOauth2ProxyEnv(oauth2ProxyPort, userPort int32) []corev1.EnvVar {

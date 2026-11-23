@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -174,8 +175,77 @@ func oauth2ProxyContainer(proxyPort, userPort int32, envFrom []corev1.EnvFromSou
 			SuccessThreshold: 1,
 			FailureThreshold: 3,
 		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("125m"),
+				corev1.ResourceMemory: resource.MustParse("250M"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("125m"),
+				corev1.ResourceMemory: resource.MustParse("250M"),
+			},
+		},
 		Lifecycle:       userLifecycle,
 		SecurityContext: queueSecurityContext,
+	}
+}
+
+func TestParseOauth2ProxyResources(t *testing.T) {
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		wantCPU     string
+		wantMemory  string
+	}{{
+		name:       "no annotations",
+		wantCPU:    "125m",
+		wantMemory: "250M",
+	}, {
+		name: "both annotations set",
+		annotations: map[string]string{
+			Oauth2ProxyCPUAnnotation:    "500m",
+			Oauth2ProxyMemoryAnnotation: "1Gi",
+		},
+		wantCPU:    "500m",
+		wantMemory: "1Gi",
+	}, {
+		name:        "only cpu set falls back to defaults",
+		annotations: map[string]string{Oauth2ProxyCPUAnnotation: "500m"},
+		wantCPU:     "125m",
+		wantMemory:  "250M",
+	}, {
+		name:        "only memory set falls back to defaults",
+		annotations: map[string]string{Oauth2ProxyMemoryAnnotation: "1Gi"},
+		wantCPU:     "125m",
+		wantMemory:  "250M",
+	}, {
+		name: "invalid cpu falls back to defaults",
+		annotations: map[string]string{
+			Oauth2ProxyCPUAnnotation:    "bogus",
+			Oauth2ProxyMemoryAnnotation: "1Gi",
+		},
+		wantCPU:    "125m",
+		wantMemory: "250M",
+	}, {
+		name: "invalid memory falls back to defaults",
+		annotations: map[string]string{
+			Oauth2ProxyCPUAnnotation:    "500m",
+			Oauth2ProxyMemoryAnnotation: "bogus",
+		},
+		wantCPU:    "125m",
+		wantMemory: "250M",
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cpu, memory := parseOauth2ProxyResources(test.annotations)
+			if want := resource.MustParse(test.wantCPU); !cpu.Equal(want) {
+				t.Errorf("cpu = %s, want %s", cpu.String(), test.wantCPU)
+			}
+			if want := resource.MustParse(test.wantMemory); !memory.Equal(want) {
+				t.Errorf("memory = %s, want %s", memory.String(), test.wantMemory)
+			}
+		})
 	}
 }
 
